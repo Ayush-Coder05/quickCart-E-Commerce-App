@@ -1,5 +1,5 @@
-﻿<p align="center">
-  <img src="./assets/images/readme_banner.jpg" alt="quickCart Banner" width="700" />
+<p align="center">
+  <img src="./assets/images/Screenshot_2026-07-30_000109.png" alt="quickCart Banner" width="700" />
 </p>
 
 <h1 align="center">quickCart</h1>
