@@ -60,8 +60,7 @@ interface LowStockItem {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:   "#F59E0B",
-  confirmed: "#3B82F6",
+  confirmed: "#16A34A",
   packed:    "#8B5CF6",
   shipped:   "#6366F1",
   delivered: "#10B981",
@@ -134,7 +133,7 @@ export default function DashboardScreen() {
             id:        d.id,
             userId:    data.userId ?? "",
             total:     data.total  ?? 0,
-            status:    data.status ?? "pending",
+            status:    data.status === "pending" ? "confirmed" : (data.status ?? "confirmed"),
             createdAt: data.createdAt?.toDate?.() ?? new Date(),
             city:      data.deliveryAddress?.city,
           };
@@ -239,7 +238,7 @@ export default function DashboardScreen() {
           <StatCard icon="cube-outline"      label="Available Items" value={stats?.availableItems ?? 0} color="#F59E0B" loading={loading} />
         </View>
         <View style={styles.statsGrid}>
-          <StatCard icon="time-outline"      label="Pending Orders"  value={stats?.pendingOrders ?? 0} color="#EF4444" loading={loading} />
+          <StatCard icon="time-outline"      label="Active Orders"  value={stats?.pendingOrders ?? 0} color="#EF4444" loading={loading} />
         </View>
 
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Orders</Text>

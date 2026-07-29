@@ -71,7 +71,12 @@ export function CrudModal({
     if (visible) {
       const defaults: Record<string, unknown> = {};
       fields.forEach((f) => {
-        defaults[f.key] = initial?.[f.key] ?? (f.type === "boolean" ? false : f.type === "number" ? "" : "");
+        if (f.type === "select" && f.options?.length) {
+          // For select fields, use the initial value if present, otherwise fall back to the first option
+          defaults[f.key] = initial?.[f.key] ?? f.options[0].value;
+        } else {
+          defaults[f.key] = initial?.[f.key] ?? (f.type === "boolean" ? false : f.type === "number" ? "" : "");
+        }
       });
       setForm(defaults);
       setErrors({});
@@ -241,11 +246,11 @@ const styles = StyleSheet.create({
   switchRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
   switchLabel: { fontSize: 14, color: "#374151", fontWeight: "600" },
 
-  selectRow:         { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  selectChip:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5, borderColor: "#D1D5DB", backgroundColor: "#F9FAFB" },
-  selectChipActive:  { backgroundColor: "#F3E5F5", borderColor: PRIMARY },
-  selectChipText:    { fontSize: 13, fontWeight: "600", color: "#374151" },
-  selectChipTextActive: { color: PRIMARY },
+  selectRow:            { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selectChip:           { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1.5, borderColor: "#D1D5DB", backgroundColor: "#F9FAFB" },
+  selectChipActive:     { backgroundColor: "#22C55E", borderColor: "#22C55E" },
+  selectChipText:       { fontSize: 13, fontWeight: "600", color: "#374151" },
+  selectChipTextActive: { color: "#fff", fontWeight: "700" },
 
   footer: {
     flexDirection: "row", gap: 12, padding: 16,

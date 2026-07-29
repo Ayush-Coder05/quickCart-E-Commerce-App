@@ -227,7 +227,8 @@ export default function ItemDetailScreen() {
           <View style={styles.deliveryRow}>
             <Ionicons name="location-outline" size={20} color={TEXT_DARK} style={{ marginTop: 2 }} />
             <View style={{ marginLeft: 12, flex: 1 }}>
-              <Text style={styles.deliveryTitle}>Delivery in {deliveryMins} mins | <Text style={styles.freeText}>Free</Text> <Text style={styles.strikethrough}>₹40</Text></Text>
+              <Text style={styles.deliveryTitle}>Delivery in {deliveryMins} mins</Text>
+              <Text style={styles.deliveryPromo}>🚚 Free delivery on orders above ₹200</Text>
               {product.city && <Text style={styles.deliverySub}>Shipping from {product.city}</Text>}
             </View>
           </View>
@@ -412,6 +413,7 @@ const styles = StyleSheet.create({
   // Delivery
   deliveryRow: { flexDirection: "row", alignItems: "flex-start" },
   deliveryTitle: { fontSize: 14, color: TEXT_DARK, fontWeight: "500", marginBottom: 4 },
+  deliveryPromo: { fontSize: 14, color: "#16A34A", fontWeight: "600", marginBottom: 4 },
   freeText: { color: FK_GREEN, fontWeight: "bold" },
   strikethrough: { color: TEXT_MUTED, textDecorationLine: "line-through" },
   deliverySub: { fontSize: 13, color: TEXT_MUTED },

@@ -15,6 +15,8 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "../utils/firebase";
 
 // ── Expo Go detection ─────────────────────────────────────────────────────────
 // `appOwnership === "expo"` → running inside Expo Go
@@ -149,6 +151,37 @@ export async function getExpoPushToken(): Promise<string | null> {
     return null;
   }
 }
+/**
+ * Store the current device's Expo push token in Firestore under users/{uid}.pushToken.
+ * Call this after every successful login/signup so the token stays fresh.
+ * Silently no-ops in Expo Go or when permission is not granted.
+ */
+export async function saveExpoPushToken(uid: string): Promise<void> {
+  try {
+    const token = await getExpoPushToken();
+    if (!token) return;
+    await updateDoc(doc(db, "users", uid), { pushToken: token });
+  } catch {
+    // Non-critical — do not block login flow
+  }
+}
 
-
-
+/**
+ * Schedule an immediate local push notification on the current device.
+ * Used to notify the customer that their order was auto-confirmed.
+ * Silently no-ops in Expo Go.
+ */
+export async function sendLocalOrderNotification(
+  title: string,
+  body:  string,
+): Promise<void> {
+  if (IS_EXPO_GO || !Notifications) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: true },
+      trigger: null, // fire immediately
+    });
+  } catch {
+    // Non-critical
+  }
+}

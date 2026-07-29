@@ -1,4 +1,4 @@
-import {
+﻿import {
   Timestamp,
   addDoc,
   collection,
@@ -19,6 +19,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { db, auth } from "./firebase";
+import { saveExpoPushToken } from "../services/notificationService";
 
 export const DEFAULT_OTP = "123456";
 
@@ -152,6 +153,9 @@ export async function registerUserWithEmail(
   // Firebase sends the verification email from its own servers - no app password needed
   await sendEmailVerification(credential.user);
 
+  // Store push token so this device can receive order/admin notifications
+  saveExpoPushToken(uid).catch(() => {}); // fire-and-forget, non-blocking
+
   return uid;
 }
 
@@ -182,12 +186,16 @@ export async function userExistsByEmail(email: string): Promise<boolean> {
     throw error;
   }
 }
+
 /**
  * Sign in with email + password via Firebase Auth.
  * Returns the Firebase user on success, throws on failure.
+ * Also refreshes the stored push token (token can rotate after reinstall).
  */
 export async function loginUserWithEmail(email: string, password: string) {
   const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+  // Refresh push token on every login (token can rotate after reinstall)
+  saveExpoPushToken(credential.user.uid).catch(() => {});
   return credential.user;
 }
 
@@ -221,7 +229,3 @@ export async function logoutUser(): Promise<void> {
     // Silently ignore sign-out errors (e.g. already signed out)
   }
 }
-
-
-
-

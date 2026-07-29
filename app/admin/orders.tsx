@@ -42,15 +42,20 @@ const PRIMARY = "#16A34A";
 const BG      = "#F3F4F6";
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:   "#F59E0B",
-  confirmed: "#3B82F6",
+  confirmed: "#16A34A",
+  preparing: "#F59E0B",
   packed:    "#8B5CF6",
-  shipped:   "#6366F1",
+  outForDelivery: "#6366F1",
   delivered: "#10B981",
   cancelled: "#EF4444",
 };
 
-const STATUS_LABELS = ["All", "pending", "confirmed", "packed", "shipped", "delivered", "cancelled"];
+const STATUS_LABELS = ["All", "confirmed", "preparing", "packed", "outForDelivery", "delivered", "cancelled"];
+
+function formatStatus(status: string) {
+  if (status === "outForDelivery") return "Out For Delivery";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 // Human-readable address field labels
 const ADDRESS_LABELS: Record<string, string> = {
@@ -81,6 +86,8 @@ interface Order {
   status:          string;
   deliveryAddress: Record<string, string>;
   createdAt:       Date;
+  cancelledBy?:    string;
+  cancelledAt?:    Date;
 }
 
 export default function OrdersScreen() {
@@ -108,9 +115,11 @@ export default function OrdersScreen() {
             userId:          data.userId          ?? "",
             items:           data.items           ?? [],
             total:           data.total           ?? 0,
-            status:          data.status          ?? "pending",
+            status:          data.status === "pending" ? "confirmed" : (data.status ?? "confirmed"),
             deliveryAddress: data.deliveryAddress ?? {},
             createdAt:       data.createdAt?.toDate?.() ?? new Date(),
+            cancelledBy:     data.cancelledBy,
+            cancelledAt:     data.cancelledAt?.toDate?.(),
           };
         }),
       );
@@ -153,6 +162,7 @@ export default function OrdersScreen() {
       await updateDoc(doc(db, "orders", order.id), {
         status:    newStatus,
         updatedAt: serverTimestamp(),
+        [`${newStatus}At`]: serverTimestamp(),
       });
       setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null));
       await load();
@@ -177,7 +187,7 @@ export default function OrdersScreen() {
         <Text style={styles.orderTotal}>{formatRupees(item.total)}</Text>
         <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[item.status] ?? "#9CA3AF") + "22" }]}>
           <Text style={[styles.statusText, { color: STATUS_COLORS[item.status] ?? "#9CA3AF" }]}>
-            {item.status}
+            {formatStatus(item.status)}
           </Text>
         </View>
       </View>
@@ -212,7 +222,7 @@ export default function OrdersScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterRow}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}
       >
         {STATUS_LABELS.map((s) => (
           <Pressable
@@ -225,7 +235,7 @@ export default function OrdersScreen() {
               },
             ]}
           >
-            <Text style={[styles.filterText, statusFilter === s && { color: "#fff" }]}>{s}</Text>
+            <Text style={[styles.filterText, statusFilter === s && { color: "#fff" }]}>{formatStatus(s)}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -308,7 +318,7 @@ export default function OrdersScreen() {
                       {isActive && (
                         <Ionicons name="checkmark-circle" size={13} color="#fff" style={{ marginRight: 4 }} />
                       )}
-                      <Text style={[styles.statusChipText, isActive && { color: "#fff" }]}>{s}</Text>
+                      <Text style={[styles.statusChipText, isActive && { color: "#fff" }]}>{formatStatus(s)}</Text>
                     </Pressable>
                   );
                 })}
@@ -330,6 +340,27 @@ export default function OrdersScreen() {
                 </View>
               ) : (
                 <Text style={styles.detailMuted}>No address saved.</Text>
+              )}
+
+              {/* Cancellation Details */}
+              {selectedOrder?.status === "cancelled" && (
+                <>
+                  <Text style={[styles.detailSection, { marginTop: 20 }]}>Cancellation Details</Text>
+                  <View style={styles.addressCard}>
+                    <View style={styles.addressRow}>
+                      <Text style={styles.addressLabel}>Cancelled By</Text>
+                      <Text style={styles.addressValue}>{selectedOrder.cancelledBy === "customer" ? "Customer" : (selectedOrder.cancelledBy || "Unknown")}</Text>
+                    </View>
+                    {selectedOrder.cancelledAt && (
+                      <View style={styles.addressRow}>
+                        <Text style={styles.addressLabel}>Cancelled At</Text>
+                        <Text style={styles.addressValue}>
+                          {selectedOrder.cancelledAt.toLocaleString("en-IN")}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </>
               )}
 
               {/* Items */}
@@ -365,10 +396,21 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#E5E7EB",
   },
   searchInput: { flex: 1, fontSize: 14, color: "#1F2937" },
-  filterRow:   { maxHeight: 48, marginBottom: 4 },
+  filterRow:   {
+    flexGrow: 0,
+    flexShrink: 0,
+    marginBottom: 4,
+    marginTop: 4,
+  },
   filterChip:  {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: "#E5E7EB",
+    height: 42,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 21,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
   },
   filterText: { fontSize: 12, fontWeight: "700", color: "#374151", textTransform: "capitalize" },
 
@@ -385,7 +427,7 @@ const styles = StyleSheet.create({
   orderMeta:  { fontSize: 12, color: "#6B7280", marginTop: 2 },
   orderTotal: { fontSize: 14, fontWeight: "800", color: "#1F2937", marginBottom: 4 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  statusText:  { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
+  statusText:  { fontSize: 11, fontWeight: "700" },
   emptyBox:   { padding: 40, alignItems: "center", gap: 12 },
   emptyText:  { color: "#9CA3AF", fontSize: 14 },
 
@@ -426,7 +468,7 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1.5,
     borderColor: "#E5E7EB", backgroundColor: "#F9FAFB",
   },
-  statusChipText:     { fontSize: 12, fontWeight: "700", color: "#374151", textTransform: "capitalize" },
+  statusChipText:     { fontSize: 12, fontWeight: "700", color: "#374151" },
   statusChipDisabled: { opacity: 0.35 },
 
   // Address

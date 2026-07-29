@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, StatusBar, Platform, ActivityIndicator, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,22 +9,25 @@ import { cartStore } from "../utils/cartStore";
 import { stateStore } from "../utils/stateStore";
 import { formatRupees } from "../utils/currency";
 import { ROUTES } from "../utils/routes";
-import { auth, db } from "../utils/firebase";
+import { auth } from "../utils/firebase";
 import { getAddresses, SavedAddress } from "../services/addressService";
-import { collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { placeOrder, notifyAdmins } from "../services/orderService";
 
 const PRIMARY_COLOR = "#16A34A";
 const BG_COLOR = "#F3F4F6";
 const TEXT_DARK = "#1F2937";
 const TEXT_MUTED = "#6B7280";
-const DELIVERY_FEE = 49;
-const FREE_DELIVERY_THRESHOLD = 500;
+const DELIVERY_FEE = 30;
+const FREE_DELIVERY_THRESHOLD = 200;
 
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
-  const [cartItems, setCartItems] = useState(cartStore.items);
+  const [isProcessing,      setIsProcessing]      = useState(false);
+  const [orderSuccess,       setOrderSuccess]       = useState(false);
+  const [cartItems,          setCartItems]          = useState(cartStore.items);
+  const [estimatedDelivery,  setEstimatedDelivery]  = useState<Date | null>(null);
+  const [countdown,          setCountdown]          = useState("");
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Address state ──────────────────────────────────────────────────────────
   const [addresses,       setAddresses]       = useState<SavedAddress[]>([]);
@@ -32,6 +35,28 @@ export default function CheckoutScreen() {
   const [addrLoading,     setAddrLoading]     = useState(true);
 
   React.useEffect(() => cartStore.subscribe(setCartItems), []);
+
+  // ── Live countdown timer ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!estimatedDelivery) return;
+
+    function tick() {
+      const diffMs = estimatedDelivery!.getTime() - Date.now();
+      if (diffMs <= 0) {
+        setCountdown("Arriving now");
+        if (timerRef.current) clearInterval(timerRef.current);
+        return;
+      }
+      const totalMins = Math.ceil(diffMs / 60_000);
+      const hrs  = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      setCountdown(hrs > 0 ? `${hrs}h ${mins}min` : `${mins} min`);
+    }
+
+    tick();
+    timerRef.current = setInterval(tick, 60_000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [estimatedDelivery]);
 
   const itemTotal   = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFee = itemTotal >= FREE_DELIVERY_THRESHOLD || itemTotal === 0 ? 0 : DELIVERY_FEE;
@@ -96,38 +121,21 @@ export default function CheckoutScreen() {
 
     setIsProcessing(true);
     try {
-      const orderRef = doc(collection(db, "orders"));
-      await setDoc(orderRef, {
-        orderId: orderRef.id,
-        userId: uid,
-        userEmail: auth.currentUser?.email ?? "",
-        items: cartItems.map((item) => ({
-          id: item.id,
-          title: item.title,
-          quantity: item.quantity,
-          price: item.price,
-          imageUrl: item.imageUrl ?? "",
-        })),
-        total: grandTotal,
-        subtotal: itemTotal,
+      const { orderId, estimatedDelivery: eta } = await placeOrder({
+        uid,
+        userEmail:       auth.currentUser?.email ?? "",
+        cartItems,
+        selectedAddress,
+        grandTotal,
+        itemTotal,
         deliveryFee,
-        status: "pending",
-        paymentMethod: "Cash on Delivery",
-        deliveryAddress: {
-          label: selectedAddress.label,
-          recipientName: selectedAddress.recipientName,
-          phone: selectedAddress.phone,
-          houseFlat: selectedAddress.houseFlat,
-          streetArea: selectedAddress.streetArea,
-          landmark: selectedAddress.landmark,
-          city: selectedAddress.city,
-          state: selectedAddress.state,
-          postalCode: selectedAddress.postalCode,
-          notes: selectedAddress.notes,
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        freeDelivery: deliveryFee === 0,
       });
+
+      // Notify all admin devices immediately (fire-and-forget)
+      notifyAdmins(orderId, cartItems.length, grandTotal).catch(() => {});
+
+      setEstimatedDelivery(eta);
       await cartStore.clear();
       setOrderSuccess(true);
     } catch (error) {
@@ -154,6 +162,10 @@ export default function CheckoutScreen() {
   };
 
   if (orderSuccess) {
+    const arrivalTime = estimatedDelivery
+      ? estimatedDelivery.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+      : null;
+
     return (
       <View style={[styles.screen, styles.centerContent]}>
         <StatusBar barStyle="light-content" />
@@ -167,12 +179,31 @@ export default function CheckoutScreen() {
           Your groceries are being packed and will be delivered to{" "}
           {selectedAddress
             ? `${selectedAddress.houseFlat}, ${selectedAddress.city}`
-            : stateStore.current || "your location"}{" "}
-          shortly.
+            : stateStore.current || "your location"}.
         </Animated.Text>
-        <Animated.View entering={FadeIn.delay(600)} style={{ width: "100%", paddingHorizontal: 32, marginTop: 32 }}>
+
+        {/* ── Estimated Delivery Card ──────────────────────────────────── */}
+        {arrivalTime ? (
+          <Animated.View entering={FadeIn.delay(500)} style={styles.etaCard}>
+            <View style={styles.etaRow}>
+              <Ionicons name="time-outline" size={20} color={PRIMARY_COLOR} />
+              <Text style={styles.etaLabel}>Estimated Delivery</Text>
+            </View>
+            <Text style={styles.etaTime}>Arriving by {arrivalTime}</Text>
+            <View style={styles.etaCountdownRow}>
+              <View style={styles.etaCountdownDot} />
+              <Text style={styles.etaCountdown}>in {countdown}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
+
+        <Animated.View entering={FadeIn.delay(700)} style={{ width: "100%", paddingHorizontal: 32, marginTop: 24 }}>
           <Pressable style={styles.homeBtn} onPress={handleBackToHome}>
             <Text style={styles.homeBtnText}>Back to Home</Text>
+          </Pressable>
+          <Pressable style={styles.ordersBtn} onPress={() => router.replace(ROUTES.orders)}>
+            <Ionicons name="receipt-outline" size={16} color={PRIMARY_COLOR} />
+            <Text style={styles.ordersBtnText}>View My Orders</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -293,16 +324,16 @@ export default function CheckoutScreen() {
           <Text style={styles.sectionTitle}>Order Summary</Text>
           <View style={styles.card}>
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>{cartStore.totalItems} Items Total</Text>
+              <Text style={styles.billLabel}>Subtotal</Text>
               <Text style={styles.billValue}>{formatRupees(itemTotal)}</Text>
             </View>
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Delivery Fee</Text>
+              <Text style={styles.billLabel}>Delivery Charge</Text>
               <Text style={styles.billValue}>{deliveryFee === 0 ? "FREE" : formatRupees(deliveryFee)}</Text>
             </View>
             <View style={[styles.divider, { marginVertical: 12 }]} />
             <View style={styles.billRow}>
-              <Text style={styles.grandTotalLabel}>Amount to Pay</Text>
+              <Text style={styles.grandTotalLabel}>Total</Text>
               <Text style={styles.grandTotalValue}>{formatRupees(grandTotal)}</Text>
             </View>
           </View>
@@ -386,12 +417,27 @@ const styles = StyleSheet.create({
   payBtnDisabled: { opacity: 0.8 },
   payBtnText:     { color: "#fff", fontSize: 16, fontWeight: "800" },
 
-  // Success
-  successCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", marginBottom: 24 },
-  successTitle:  { color: "#fff", fontSize: 24, fontWeight: "900", marginBottom: 12, textAlign: "center" },
-  successSub:    { color: "rgba(255,255,255,0.9)", fontSize: 15, textAlign: "center", paddingHorizontal: 32, lineHeight: 22 },
-  homeBtn:       { backgroundColor: "#fff", paddingVertical: 14, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  homeBtnText:   { color: PRIMARY_COLOR, fontSize: 16, fontWeight: "800" },
+  // Success screen
+  successCircle:     { width: 100, height: 100, borderRadius: 50, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", marginBottom: 24 },
+  successTitle:      { color: "#fff", fontSize: 24, fontWeight: "900", marginBottom: 12, textAlign: "center" },
+  successSub:        { color: "rgba(255,255,255,0.9)", fontSize: 15, textAlign: "center", paddingHorizontal: 32, lineHeight: 22, marginBottom: 20 },
+  homeBtn:           { backgroundColor: "#fff", paddingVertical: 14, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  homeBtnText:       { color: PRIMARY_COLOR, fontSize: 16, fontWeight: "800" },
+  ordersBtn:         { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" },
+  ordersBtnText:     { color: "#fff", fontSize: 14, fontWeight: "700" },
+
+  // ETA delivery card
+  etaCard:           {
+    marginTop: 20, marginHorizontal: 24, backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)",
+    alignItems: "center", width: "88%",
+  },
+  etaRow:            { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  etaLabel:          { color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" },
+  etaTime:           { color: "#fff", fontSize: 22, fontWeight: "900", marginBottom: 8 },
+  etaCountdownRow:   { flexDirection: "row", alignItems: "center", gap: 6 },
+  etaCountdownDot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: "#4ADE80" },
+  etaCountdown:      { color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: "600" },
 });
 
 

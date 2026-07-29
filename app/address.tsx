@@ -12,10 +12,11 @@
 //  - Returns to calling screen on success (router.back())
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -39,86 +40,166 @@ import {
   updateAddress,
 } from "../services/addressService";
 
-const PRIMARY   = "#16A34A";
-const ACCENT    = "#DCFCE7";
-const BG        = "#F3F4F6";
-const TEXT_DARK = "#1F2937";
-const TEXT_MID  = "#374151";
+const PRIMARY    = "#16A34A";
+const ACCENT     = "#DCFCE7";
+const BG         = "#F3F4F6";
+const TEXT_DARK  = "#1F2937";
+const TEXT_MID   = "#374151";
 const TEXT_MUTED = "#6B7280";
-const BORDER    = "#D1D5DB";
-const ERROR_COL = "#DC2626";
+const BORDER     = "#D1D5DB";
+const ERROR_COL  = "#DC2626";
 
 const LABELS: ("Home" | "Work" | "Other")[] = ["Home", "Work", "Other"];
 
-// ── Validation ─────────────────────────────────────────────────────────────────
+// ── Validation ──────────────────────────────────────────────────────────────
 
 interface FormErrors {
-  houseFlat?:    string;
-  streetArea?:   string;
-  city?:         string;
-  state?:        string;
-  postalCode?:   string;
+  houseFlat?:     string;
+  streetArea?:    string;
+  city?:          string;
+  state?:         string;
+  postalCode?:    string;
   recipientName?: string;
-  phone?:        string;
+  phone?:         string;
 }
 
 function validateForm(fields: AddressFields): FormErrors {
   const errors: FormErrors = {};
-  if (!fields.houseFlat.trim())    errors.houseFlat    = "Enter house/flat number.";
-  if (!fields.streetArea.trim())   errors.streetArea   = "Enter street or area.";
-  if (!fields.city.trim())         errors.city         = "Enter city name.";
-  if (!fields.state.trim())        errors.state        = "Enter state name.";
-  if (!fields.postalCode.trim())   errors.postalCode   = "Enter postal code.";
+  if (!fields.houseFlat.trim())     errors.houseFlat     = "Enter house/flat number.";
+  if (!fields.streetArea.trim())    errors.streetArea    = "Enter street or area.";
+  if (!fields.city.trim())          errors.city          = "Enter city name.";
+  if (!fields.state.trim())         errors.state         = "Enter state name.";
+  if (!fields.postalCode.trim())    errors.postalCode    = "Enter postal code.";
   else if (!/^\d{6}$/.test(fields.postalCode.trim())) errors.postalCode = "Enter a valid 6-digit postal code.";
   if (!fields.recipientName.trim()) errors.recipientName = "Enter recipient name.";
-  if (!fields.phone.trim())        errors.phone        = "Enter phone number.";
+  if (!fields.phone.trim())         errors.phone         = "Enter phone number.";
   else if (!/^\d{10}$/.test(fields.phone.replace(/\D/g, ""))) errors.phone = "Enter a valid 10-digit phone number.";
   return errors;
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
+// ── Standalone Field component ─────────────────────────────────────────────
+// Defined OUTSIDE the screen component so React never remounts it on re-render
+// which would cause focus loss while typing.
+
+interface FieldProps {
+  label:           string;
+  value:           string;
+  onChangeText:    (v: string) => void;
+  placeholder:     string;
+  error?:          string;
+  keyboardType?:   "default" | "phone-pad" | "numeric" | "email-address";
+  maxLength?:      number;
+  multiline?:      boolean;
+  returnKeyType?:  "next" | "done" | "default";
+  onSubmitEditing?: () => void;
+  inputRef?:       React.RefObject<TextInput | null>;
+  blurOnSubmit?:   boolean;
+}
+
+const Field = React.memo(function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  keyboardType = "default",
+  maxLength,
+  multiline = false,
+  returnKeyType = "next",
+  onSubmitEditing,
+  inputRef,
+  blurOnSubmit = false,
+}: FieldProps) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        ref={inputRef}
+        style={[
+          styles.textInput,
+          multiline && styles.textInputMulti,
+          error ? styles.inputError : null,
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#9CA3AF"
+        keyboardType={keyboardType}
+        maxLength={maxLength}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
+        textAlignVertical={multiline ? "top" : "center"}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        blurOnSubmit={blurOnSubmit}
+      />
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+});
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default function AddressScreen() {
-  const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ addressId?: string }>();
+  const insets    = useSafeAreaInsets();
+  const params    = useLocalSearchParams<{ addressId?: string }>();
   const editingId = params.addressId;
 
   const [locLoading, setLocLoading] = useState(false);
   const [locBanner,  setLocBanner]  = useState("");
   const [locIsError, setLocIsError] = useState(false);
 
-  const [saving,  setSaving]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [errors, setErrors]   = useState<FormErrors>({});
+  const [errors,   setErrors]   = useState<FormErrors>({});
 
   const [form, setForm] = useState<AddressFields>({
-    houseFlat:    "",
-    streetArea:   "",
-    landmark:     "",
-    city:         "",
-    state:        "",
-    postalCode:   "",
+    houseFlat:     "",
+    streetArea:    "",
+    landmark:      "",
+    city:          "",
+    state:         "",
+    postalCode:    "",
     recipientName: "",
-    phone:        "",
-    label:        "Home",
-    notes:        "",
-    isDefault:    false,
+    phone:         "",
+    label:         "Home",
+    notes:         "",
+    isDefault:     false,
   });
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef    = useRef<ScrollView>(null);
+  // Input refs for Next-key focus chain
+  const refStreet    = useRef<TextInput>(null);
+  const refLandmark  = useRef<TextInput>(null);
+  const refCity      = useRef<TextInput>(null);
+  const refState     = useRef<TextInput>(null);
+  const refPostal    = useRef<TextInput>(null);
+  const refRecipient = useRef<TextInput>(null);
+  const refPhone     = useRef<TextInput>(null);
+  const refNotes     = useRef<TextInput>(null);
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   const setField = useCallback(
     (key: keyof AddressFields, value: string | boolean) => {
       setForm((prev) => ({ ...prev, [key]: value }));
-      // Clear field error on change
       setErrors((prev) => ({ ...prev, [key]: undefined }));
     },
     [],
   );
 
-  // ── Use Current Location ──────────────────────────────────────────────────────
+  // Stable per-field handlers prevent creating new function refs on every render
+  const setHouseFlat     = useCallback((v: string) => setField("houseFlat",     v), [setField]);
+  const setStreetArea    = useCallback((v: string) => setField("streetArea",    v), [setField]);
+  const setLandmark      = useCallback((v: string) => setField("landmark",      v), [setField]);
+  const setCity          = useCallback((v: string) => setField("city",          v), [setField]);
+  const setStateName     = useCallback((v: string) => setField("state",         v), [setField]);
+  const setPostalCode    = useCallback((v: string) => setField("postalCode",    v), [setField]);
+  const setRecipientName = useCallback((v: string) => setField("recipientName", v), [setField]);
+  const setPhone         = useCallback((v: string) => setField("phone",         v), [setField]);
+  const setNotes         = useCallback((v: string) => setField("notes",         v), [setField]);
+
+  // ── Use Current Location ───────────────────────────────────────────────────
 
   const handleUseLocation = useCallback(async () => {
     setLocLoading(true);
@@ -141,13 +222,12 @@ export default function AddressScreen() {
         postalCode: result.postalCode ? undefined : prev.postalCode,
       }));
 
-      if (result.isPartial) {
-        setLocBanner("Location detected. Some fields could not be auto-filled - please complete them manually.");
-        setLocIsError(false);
-      } else {
-        setLocBanner("Location detected and address prefilled.");
-        setLocIsError(false);
-      }
+      setLocBanner(
+        result.isPartial
+          ? "Location detected. Some fields could not be auto-filled - please complete them manually."
+          : "Location detected and address prefilled.",
+      );
+      setLocIsError(false);
     } else {
       setLocIsError(true);
 
@@ -173,7 +253,7 @@ export default function AddressScreen() {
     setLocLoading(false);
   }, []);
 
-  // ── Save ──────────────────────────────────────────────────────────────────────
+  // ── Save ───────────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
     const formErrors = validateForm(form);
@@ -204,7 +284,7 @@ export default function AddressScreen() {
     }
   }, [form, editingId]);
 
-  // ── Delete ────────────────────────────────────────────────────────────────────
+  // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = useCallback(() => {
     if (!editingId) return;
@@ -230,56 +310,23 @@ export default function AddressScreen() {
     ]);
   }, [editingId]);
 
-  // ── Render ────────────────────────────────────────────────────────────────────
-
-  const Field = useCallback(
-    ({
-      label,
-      fieldKey,
-      placeholder,
-      keyboardType = "default",
-      maxLength,
-      multiline = false,
-    }: {
-      label: string;
-      fieldKey: keyof AddressFields;
-      placeholder: string;
-      keyboardType?: "default" | "phone-pad" | "numeric" | "email-address";
-      maxLength?: number;
-      multiline?: boolean;
-    }) => (
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        <TextInput
-          style={[
-            styles.textInput,
-            multiline && styles.textInputMulti,
-            errors[fieldKey as keyof FormErrors] ? styles.inputError : null,
-          ]}
-          value={String(form[fieldKey] ?? "")}
-          onChangeText={(val) => setField(fieldKey, val)}
-          placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
-          keyboardType={keyboardType}
-          maxLength={maxLength}
-          multiline={multiline}
-          numberOfLines={multiline ? 3 : 1}
-          textAlignVertical={multiline ? "top" : "center"}
-        />
-        {errors[fieldKey as keyof FormErrors] ? (
-          <Text style={styles.errorText}>{errors[fieldKey as keyof FormErrors]}</Text>
-        ) : null}
-      </View>
-    ),
-    [form, errors, setField],
-  );
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.screen, { paddingTop: Platform.OS === "ios" ? insets.top : 0 }]}>
+    <KeyboardAvoidingView
+      style={styles.kavWrapper}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+    >
       <StatusBar barStyle="dark-content" backgroundColor={BG} />
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
+      {/* ── Header — always fixed above keyboard ───────────────────────── */}
+      <View
+        style={[
+          styles.header,
+          { paddingTop: Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 0) },
+        ]}
+      >
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={TEXT_DARK} />
         </Pressable>
@@ -297,11 +344,14 @@ export default function AddressScreen() {
         )}
       </View>
 
+      {/* ── Scrollable form — scrolls above the keyboard ───────────────── */}
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
       >
         {/* ── Use Current Location ─────────────────────────────────────── */}
         <Pressable
@@ -309,11 +359,9 @@ export default function AddressScreen() {
           disabled={locLoading}
           style={({ pressed }) => [styles.locBtn, pressed && { opacity: 0.8 }]}
         >
-          {locLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="locate" size={18} color="#fff" />
-          )}
+          {locLoading
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Ionicons name="locate" size={18} color="#fff" />}
           <Text style={styles.locBtnText}>
             {locLoading ? "Detecting location..." : "Use Current Location"}
           </Text>
@@ -351,45 +399,119 @@ export default function AddressScreen() {
 
         {/* ── Address Details ───────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Address Details</Text>
-        <Field label="House / Flat / Building *" fieldKey="houseFlat"  placeholder="e.g. A-204, Green Heights" />
-        <Field label="Street / Area *"          fieldKey="streetArea" placeholder="e.g. MG Road, Sector 14" />
-        <Field label="Landmark (optional)"      fieldKey="landmark"   placeholder="e.g. Near Reliance Mart" />
+
+        <Field
+          label="House / Flat / Building *"
+          value={form.houseFlat}
+          onChangeText={setHouseFlat}
+          placeholder="e.g. A-204, Green Heights"
+          error={errors.houseFlat}
+          returnKeyType="next"
+          onSubmitEditing={() => refStreet.current?.focus()}
+        />
+        <Field
+          label="Street / Area *"
+          value={form.streetArea}
+          onChangeText={setStreetArea}
+          placeholder="e.g. MG Road, Sector 14"
+          error={errors.streetArea}
+          inputRef={refStreet}
+          returnKeyType="next"
+          onSubmitEditing={() => refLandmark.current?.focus()}
+        />
+        <Field
+          label="Landmark (optional)"
+          value={form.landmark}
+          onChangeText={setLandmark}
+          placeholder="e.g. Near Reliance Mart"
+          inputRef={refLandmark}
+          returnKeyType="next"
+          onSubmitEditing={() => refCity.current?.focus()}
+        />
 
         <View style={styles.row}>
           <View style={{ flex: 1, marginRight: 8 }}>
             <Text style={styles.fieldLabel}>City *</Text>
             <TextInput
+              ref={refCity}
               style={[styles.textInput, errors.city ? styles.inputError : null]}
               value={form.city}
-              onChangeText={(v) => setField("city", v)}
+              onChangeText={setCity}
               placeholder="City"
               placeholderTextColor="#9CA3AF"
+              returnKeyType="next"
+              onSubmitEditing={() => refState.current?.focus()}
+              blurOnSubmit={false}
             />
             {errors.city ? <Text style={styles.errorText}>{errors.city}</Text> : null}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>State *</Text>
             <TextInput
+              ref={refState}
               style={[styles.textInput, errors.state ? styles.inputError : null]}
               value={form.state}
-              onChangeText={(v) => setField("state", v)}
+              onChangeText={setStateName}
               placeholder="State"
               placeholderTextColor="#9CA3AF"
+              returnKeyType="next"
+              onSubmitEditing={() => refPostal.current?.focus()}
+              blurOnSubmit={false}
             />
             {errors.state ? <Text style={styles.errorText}>{errors.state}</Text> : null}
           </View>
         </View>
 
-        <Field label="Postal Code *" fieldKey="postalCode" placeholder="6-digit PIN" keyboardType="numeric" maxLength={6} />
+        <Field
+          label="Postal Code *"
+          value={form.postalCode}
+          onChangeText={setPostalCode}
+          placeholder="6-digit PIN"
+          error={errors.postalCode}
+          keyboardType="numeric"
+          maxLength={6}
+          inputRef={refPostal}
+          returnKeyType="next"
+          onSubmitEditing={() => refRecipient.current?.focus()}
+        />
 
         {/* ── Recipient Details ─────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Recipient Details</Text>
-        <Field label="Recipient Name *" fieldKey="recipientName" placeholder="Full name" />
-        <Field label="Phone Number *"   fieldKey="phone"          placeholder="10-digit mobile" keyboardType="phone-pad" maxLength={10} />
+        <Field
+          label="Recipient Name *"
+          value={form.recipientName}
+          onChangeText={setRecipientName}
+          placeholder="Full name"
+          error={errors.recipientName}
+          inputRef={refRecipient}
+          returnKeyType="next"
+          onSubmitEditing={() => refPhone.current?.focus()}
+        />
+        <Field
+          label="Phone Number *"
+          value={form.phone}
+          onChangeText={setPhone}
+          placeholder="10-digit mobile"
+          error={errors.phone}
+          keyboardType="phone-pad"
+          maxLength={10}
+          inputRef={refPhone}
+          returnKeyType="next"
+          onSubmitEditing={() => refNotes.current?.focus()}
+        />
 
         {/* ── Notes ────────────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Additional Notes</Text>
-        <Field label="Delivery Instructions (optional)" fieldKey="notes" placeholder="e.g. Ring bell twice, leave at door..." multiline />
+        <Field
+          label="Delivery Instructions (optional)"
+          value={form.notes}
+          onChangeText={setNotes}
+          placeholder="e.g. Ring bell twice, leave at door..."
+          multiline
+          inputRef={refNotes}
+          returnKeyType="done"
+          blurOnSubmit
+        />
 
         {/* ── Default Toggle ────────────────────────────────────────────── */}
         <View style={styles.defaultRow}>
@@ -406,7 +528,7 @@ export default function AddressScreen() {
         </View>
       </ScrollView>
 
-      {/* ── Save Button ──────────────────────────────────────────────────── */}
+      {/* ── Save button — sits above keyboard, anchored to bottom ────────── */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <Pressable
           onPress={handleSave}
@@ -419,26 +541,26 @@ export default function AddressScreen() {
           <Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save Address"}</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen:   { flex: 1, backgroundColor: BG },
-  header:   {
+  kavWrapper:  { flex: 1, backgroundColor: BG },
+  header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: 16, paddingBottom: 14,
     backgroundColor: "#fff",
     borderBottomWidth: 1, borderBottomColor: "#F3F4F6",
   },
-  backBtn:  { padding: 4, marginRight: 8 },
-  deleteBtn: { padding: 4, marginLeft: 8 },
+  backBtn:     { padding: 4, marginRight: 8 },
+  deleteBtn:   { padding: 4, marginLeft: 8 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: "700", color: TEXT_DARK, textAlign: "center" },
 
   scroll:        { flex: 1 },
-  scrollContent: { padding: 16, gap: 0 },
+  scrollContent: { padding: 16 },
 
   // Location button
   locBtn: {
@@ -449,10 +571,10 @@ const styles = StyleSheet.create({
   locBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 
   // Banner
-  banner:          { borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1 },
-  bannerSuccess:   { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" },
-  bannerError:     { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
-  bannerText:      { fontSize: 13, fontWeight: "500", lineHeight: 19 },
+  banner:            { borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1 },
+  bannerSuccess:     { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" },
+  bannerError:       { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
+  bannerText:        { fontSize: 13, fontWeight: "500", lineHeight: 19 },
   bannerTextSuccess: { color: "#15803D" },
   bannerTextError:   { color: "#B91C1C" },
 
@@ -464,8 +586,8 @@ const styles = StyleSheet.create({
   },
 
   // Label chips
-  labelRow:     { flexDirection: "row", gap: 8, marginBottom: 4 },
-  labelChip:    {
+  labelRow:            { flexDirection: "row", gap: 8, marginBottom: 4 },
+  labelChip: {
     flex: 1, paddingVertical: 10, borderRadius: 10,
     borderWidth: 1.5, borderColor: BORDER, alignItems: "center", justifyContent: "center",
     backgroundColor: "#fff", flexDirection: "row",
@@ -475,8 +597,8 @@ const styles = StyleSheet.create({
   labelChipTextActive: { color: PRIMARY },
 
   // Fields
-  fieldGroup: { marginBottom: 12 },
-  fieldLabel: { fontSize: 13, fontWeight: "600", color: TEXT_MID, marginBottom: 6 },
+  fieldGroup:     { marginBottom: 12 },
+  fieldLabel:     { fontSize: 13, fontWeight: "600", color: TEXT_MID, marginBottom: 6 },
   textInput: {
     backgroundColor: "#fff", borderRadius: 10,
     borderWidth: 1, borderColor: BORDER,
@@ -509,4 +631,3 @@ const styles = StyleSheet.create({
   },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
-

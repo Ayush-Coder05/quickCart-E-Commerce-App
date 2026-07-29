@@ -12,8 +12,8 @@ const PRIMARY_COLOR = "#16A34A";
 const BG_COLOR = "#F3F4F6";
 const TEXT_DARK = "#212121";
 const TEXT_MUTED = "#6B7280";
-const DELIVERY_FEE = 49;
-const FREE_DELIVERY_THRESHOLD = 500;
+const DELIVERY_FEE = 30;
+const FREE_DELIVERY_THRESHOLD = 200;
 
 function CartItemRow({ item }: { item: CartItem }) {
   const itemSubtotal = item.price * item.quantity;
@@ -122,6 +122,10 @@ export default function CartScreen() {
         )}
       </View>
 
+      <View style={styles.promoBanner}>
+        <Text style={styles.promoBannerText}>🚚 Free Delivery on Orders Above ₹200</Text>
+      </View>
+
       {isCartEmpty ? (
         /* ── Empty state ──────────────────────────────────────────────────── */
         <View style={styles.emptyState}>
@@ -160,34 +164,33 @@ export default function CartScreen() {
               <Text style={styles.sectionTitle}>Bill Details</Text>
               <View style={styles.card}>
                 <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Item Total</Text>
+                  <Text style={styles.billLabel}>Subtotal</Text>
                   <Text style={styles.billValue}>{formatRupees(itemTotal)}</Text>
                 </View>
 
                 <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Delivery Fee</Text>
+                  <Text style={styles.billLabel}>Delivery Charge</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    {deliveryFee === 0 && itemTotal > 0 && (
-                      <Text style={[styles.billValue, { textDecorationLine: "line-through", color: TEXT_MUTED, fontSize: 12 }]}>
-                        {formatRupees(DELIVERY_FEE)}
-                      </Text>
-                    )}
                     <Text style={[styles.billValue, deliveryFee === 0 ? styles.freeText : null]}>
                       {deliveryFee === 0 ? "FREE" : formatRupees(deliveryFee)}
                     </Text>
                   </View>
                 </View>
 
-                {itemTotal > 0 && itemTotal < FREE_DELIVERY_THRESHOLD && (
+                {itemTotal > 0 && itemTotal < FREE_DELIVERY_THRESHOLD ? (
                   <Text style={styles.deliveryHint}>
-                    Add {formatRupees(FREE_DELIVERY_THRESHOLD - itemTotal)} more for Free Delivery!
+                    Add {formatRupees(FREE_DELIVERY_THRESHOLD - itemTotal)} more to get FREE delivery.
                   </Text>
-                )}
+                ) : itemTotal >= FREE_DELIVERY_THRESHOLD ? (
+                  <Text style={[styles.deliveryHint, { backgroundColor: "#DCFCE7", color: "#15803D" }]}>
+                    🎉 You have unlocked FREE delivery!
+                  </Text>
+                ) : null}
 
                 <View style={[styles.divider, { marginVertical: 12 }]} />
 
                 <View style={styles.billRow}>
-                  <Text style={styles.grandTotalLabel}>Grand Total</Text>
+                  <Text style={styles.grandTotalLabel}>Total</Text>
                   <Text style={styles.grandTotalValue}>{formatRupees(grandTotal)}</Text>
                 </View>
               </View>
@@ -229,6 +232,8 @@ const styles = StyleSheet.create({
   clearBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   clearBtnText: { color: "#EF4444", fontSize: 13, fontWeight: "700" },
   headerTitle: { color: TEXT_DARK, fontSize: 18, fontWeight: "800" },
+  promoBanner: { backgroundColor: "#F0FDF4", paddingVertical: 8, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#DCFCE7" },
+  promoBannerText: { color: "#15803D", fontSize: 13, fontWeight: "700" },
 
   scroll:        { flex: 1 },
   scrollContent: { padding: 16 },

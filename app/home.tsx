@@ -45,6 +45,8 @@ import { MainTabs, MAIN_TABS_HEIGHT } from "../components/MainTabs";
 
 const { width: SW } = Dimensions.get("window");
 
+const CART_BAR_HEIGHT = 72; // pill height (paddingVertical 8*2 + inner 14*2 + content ~24)
+
 const PRIMARY_COLOR = "#16A34A";
 const ACCENT_COLOR = "#FFC200"; // Flipkart Minutes Yellow
 const BG_COLOR = "#F3F4F6";      // Light Gray App Background
@@ -528,10 +530,6 @@ export default function HomeScreen() {
       <View style={styles.appBar}>
         <View style={styles.appBarTop}>
           <View>
-            <View style={styles.deliveryRow}>
-              <Ionicons name="flash" size={12} color="#DCFCE7" />
-              <Text style={styles.deliverToText}>Delivery in 10 minutes</Text>
-            </View>
             <Pressable onPress={handleChangeState} style={styles.stateSelector}>
               <Text style={styles.stateSelectorText}>{currentState || "Select Location"}</Text>
               <Ionicons name="chevron-down" size={16} color="#fff" />
@@ -570,6 +568,10 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <View style={styles.promoBanner}>
+        <Text style={styles.promoBannerText}>🚚 Free Delivery on Orders Above ₹200</Text>
+      </View>
+
       <FlatList
         data={filtered}
         keyExtractor={keyExtractor}
@@ -578,7 +580,9 @@ export default function HomeScreen() {
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: totalItems > 0 ? insets.bottom + MAIN_TABS_HEIGHT + 110 : insets.bottom + MAIN_TABS_HEIGHT + 24 }
+          { paddingBottom: totalItems > 0
+              ? insets.bottom + MAIN_TABS_HEIGHT + CART_BAR_HEIGHT + 16
+              : insets.bottom + MAIN_TABS_HEIGHT + 24 }
         ]}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
@@ -602,7 +606,7 @@ export default function HomeScreen() {
       />
 
       {totalItems > 0 && (
-        <View style={[styles.cartBarContainer, { bottom: MAIN_TABS_HEIGHT - 4 }]}>
+        <View style={[styles.cartBarContainer, { bottom: insets.bottom + MAIN_TABS_HEIGHT + 12 }]}>
           <View style={styles.cartBarInner}>
             <View style={styles.cartBarLeft}>
               <View style={styles.cartBarIconWrap}>
@@ -694,8 +698,6 @@ const styles = StyleSheet.create({
   // App Bar
   appBar: { backgroundColor: PRIMARY_COLOR, paddingTop: Platform.OS === 'ios' ? 48 : StatusBar.currentHeight ? StatusBar.currentHeight + 8 : 42, paddingBottom: 14, paddingHorizontal: 16, zIndex: 10 },
   appBarTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  deliveryRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 3 },
-  deliverToText: { color: "rgba(255,255,255,0.92)", fontSize: 11, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
   stateSelector: { flexDirection: "row", alignItems: "center", gap: 4 },
   stateSelectorText: { color: "#fff", fontSize: 19, fontWeight: "900" },
   appBarRight: { flexDirection: "row", gap: 12, alignItems: "center" },
@@ -713,6 +715,10 @@ const styles = StyleSheet.create({
   searchBar: { flexDirection: "row", alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 18, paddingHorizontal: 14, height: 46, borderWidth: 1, borderColor: "rgba(255,255,255,0.55)" },
   searchIcon: { marginRight: 6 },
   searchInput: { flex: 1, color: TEXT_DARK, fontSize: 15, fontWeight: "500" },
+
+  // Promo Banner
+  promoBanner: { backgroundColor: "#F0FDF4", paddingVertical: 8, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#DCFCE7" },
+  promoBannerText: { color: "#15803D", fontSize: 13, fontWeight: "700" },
 
   // Scroll / List
   scroll: { flex: 1 },
@@ -807,8 +813,14 @@ const styles = StyleSheet.create({
   retryBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
   // Cart bar
-  cartBarContainer: { position: "absolute", left: 0, right: 0, padding: 12, backgroundColor: "#fff", borderTopLeftRadius: 16, borderTopRightRadius: 16, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 15 },
-  cartBarInner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: PRIMARY_COLOR, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  cartBarContainer: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    paddingVertical: 8,
+    // bottom is set dynamically in JSX
+  },
+  cartBarInner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: PRIMARY_COLOR, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, elevation: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 12 },
   cartBarLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   cartBarIconWrap: { backgroundColor: "rgba(255,255,255,0.2)", padding: 8, borderRadius: 8 },
   cartBarItems: { color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: "600", marginBottom: 2 },

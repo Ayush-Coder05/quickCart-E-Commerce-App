@@ -1,19 +1,19 @@
-export type OrderStatus = "pending" | "confirmed" | "packed" | "shipped" | "delivered" | "cancelled";
+export type OrderStatus = "confirmed" | "preparing" | "packed" | "outForDelivery" | "delivered" | "cancelled";
 
 export const ORDER_STATUS_FLOW: OrderStatus[] = [
-  "pending",
   "confirmed",
+  "preparing",
   "packed",
-  "shipped",
+  "outForDelivery",
   "delivered",
   "cancelled",
 ];
 
 export const NEXT_ORDER_STATUS: Record<OrderStatus, OrderStatus | null> = {
-  pending: "confirmed",
-  confirmed: "packed",
-  packed: "shipped",
-  shipped: "delivered",
+  confirmed: "preparing",
+  preparing: "packed",
+  packed: "outForDelivery",
+  outForDelivery: "delivered",
   delivered: null,
   cancelled: null,
 };
