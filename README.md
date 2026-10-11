@@ -5,7 +5,7 @@
 <h1 align="center">quickCart</h1>
 
 <p align="center">
-  ⚡ Groceries &amp; essentials delivered in 10 minutes — built with Expo &amp; Firebase
+  ⚡ Groceries &amp; essentials delivery app — built with Expo &amp; Firebase
 </p>
 
 <p align="center">
