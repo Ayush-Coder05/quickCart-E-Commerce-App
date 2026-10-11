@@ -61,8 +61,9 @@ interface LowStockItem {
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "#16A34A",
+  preparing: "#F59E0B",
   packed:    "#8B5CF6",
-  shipped:   "#6366F1",
+  outForDelivery: "#6366F1",
   delivered: "#10B981",
   cancelled: "#EF4444",
 };
@@ -105,7 +106,7 @@ export default function DashboardScreen() {
       const [usersCount, ordersCount, pendingOrders, deliveredRev] = await Promise.all([
         safeCount(collection(db, "users")),
         safeCount(collection(db, "orders")),
-        safeCount(query(collection(db, "orders"), where("status", "in", ["pending", "confirmed", "packed", "shipped"]))),
+        safeCount(query(collection(db, "orders"), where("status", "in", ["pending", "confirmed", "preparing", "packed", "outForDelivery"]))),
         fetchRevenue()
       ]);
 

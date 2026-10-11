@@ -20,8 +20,8 @@ import {
   Alert
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useLocalSearchParams, router, useFocusEffect } from "expo-router";
-import { CommonActions } from "@react-navigation/native";
+import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
+
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,8 +31,8 @@ import { stateStore } from "../utils/stateStore";
 
 export default function StatePickerScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const { hint } = useLocalSearchParams<{ hint?: string }>();
+
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);

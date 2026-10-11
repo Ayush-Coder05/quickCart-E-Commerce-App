@@ -64,7 +64,7 @@ export function AuthField({
           >
             <Ionicons
               name={visible ? "eye-off-outline" : "eye-outline"}
-              size={21}
+              size={19}
               color="#6B7280"
             />
           </Pressable>
@@ -77,23 +77,23 @@ export function AuthField({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 8,
-    marginBottom: 16,
+    gap: 5,
+    marginBottom: 12,
   },
   label: {
     color: "#374151",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
   inputRow: {
-    minHeight: 52,
+    height: 46,
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#D1D5DB",
     backgroundColor: "#F9FAFB",
-    paddingLeft: 14,
+    paddingLeft: 12,
   },
   inputRowError: {
     borderColor: "#EF4444",
@@ -101,20 +101,19 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: "#1F2937",
-    fontSize: 15,
-    paddingVertical: 13,
-    paddingRight: 12,
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingRight: 10,
   },
   iconButton: {
-    width: 46,
-    height: 52,
+    width: 40,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
   },
   error: {
     color: "#EF4444",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 15,
   },
 });
-

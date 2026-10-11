@@ -52,13 +52,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   inner: {
-    minHeight: 52,
+    minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
   },
   innerSmall: {
-    minHeight: 52, // matches AuthField height
+    minHeight: 46, // matches AuthField height
     paddingHorizontal: 12,
   },
   text: {

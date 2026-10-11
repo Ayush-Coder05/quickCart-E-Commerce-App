@@ -96,21 +96,38 @@ export default function CreateAccountScreen() {
   return (
     <AuthCard
       title="Create account"
-      subtitle="Fill in your details to get started. We'll verify your email."
+      subtitle="Fill in your details to get started."
+      scrollable
     >
-      {/* ── Full name ──────────────────────────────────────────────────── */}
-      <AuthField
-        label="Full name"
-        value={name}
-        onChangeText={(val) => { setName(val); clearError("name"); }}
-        error={errors.name}
-        placeholder="Ayush Sharma"
-        autoCapitalize="words"
-        autoComplete="name"
-        textContentType="name"
-      />
+      {/* ── Row 1: Full name + Mobile ──────────────────────────────────── */}
+      <View style={styles.row}>
+        <View style={styles.halfField}>
+          <AuthField
+            label="Full name"
+            value={name}
+            onChangeText={(val) => { setName(val); clearError("name"); }}
+            error={errors.name}
+            placeholder="Ayush Sharma"
+            autoCapitalize="words"
+            autoComplete="name"
+            textContentType="name"
+          />
+        </View>
+        <View style={styles.halfField}>
+          <AuthField
+            label="Mobile (optional)"
+            value={mobile}
+            onChangeText={(val) => { setMobile(val); clearError("phone"); }}
+            error={errors.phone}
+            placeholder="10-digit"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+          />
+        </View>
+      </View>
 
-      {/* ── Email address ─────────────────────────────────────────────── */}
+      {/* ── Row 2: Email (full width) ──────────────────────────────────── */}
       <AuthField
         label="Email address"
         value={email}
@@ -123,45 +140,38 @@ export default function CreateAccountScreen() {
         textContentType="emailAddress"
       />
 
-      {/* ── Password ──────────────────────────────────────────────────── */}
-      <AuthField
-        label="Password"
-        value={password}
-        onChangeText={(val) => { setPassword(val); clearError("password"); }}
-        error={errors.password}
-        placeholder="At least 6 characters"
-        secureTextEntry
-        autoComplete="new-password"
-        textContentType="newPassword"
-      />
+      {/* ── Row 3: Password + Confirm password ────────────────────────── */}
+      <View style={styles.row}>
+        <View style={styles.halfField}>
+          <AuthField
+            label="Password"
+            value={password}
+            onChangeText={(val) => { setPassword(val); clearError("password"); }}
+            error={errors.password}
+            placeholder="Min 6 chars"
+            secureTextEntry
+            autoComplete="new-password"
+            textContentType="newPassword"
+          />
+        </View>
+        <View style={styles.halfField}>
+          <AuthField
+            label="Confirm password"
+            value={confirmPassword}
+            onChangeText={(val) => { setConfirmPassword(val); clearError("confirmPassword"); }}
+            error={errors.confirmPassword}
+            placeholder="Repeat password"
+            secureTextEntry
+            autoComplete="new-password"
+            textContentType="newPassword"
+          />
+        </View>
+      </View>
 
-      {/* ── Confirm password ──────────────────────────────────────────── */}
-      <AuthField
-        label="Confirm password"
-        value={confirmPassword}
-        onChangeText={(val) => { setConfirmPassword(val); clearError("confirmPassword"); }}
-        error={errors.confirmPassword}
-        placeholder="Repeat your password"
-        secureTextEntry
-        autoComplete="new-password"
-        textContentType="newPassword"
-      />
-
-      {/* ── Mobile number (optional) ──────────────────────────────────── */}
-      <AuthField
-        label="Mobile number (optional)"
-        value={mobile}
-        onChangeText={(val) => { setMobile(val); clearError("phone"); }}
-        error={errors.phone}
-        placeholder="10-digit number"
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        textContentType="telephoneNumber"
-      />
-
+      {/* ── OTP hint ──────────────────────────────────────────────────── */}
       <View style={styles.hint}>
         <Text style={styles.hintText}>
-          We&apos;ll send a 6-digit code to your email to verify your account.
+          We'll send a 6-digit code to your email to verify your account.
         </Text>
       </View>
 
@@ -181,33 +191,32 @@ export default function CreateAccountScreen() {
 }
 
 const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 0,
+  },
+  halfField: {
+    flex: 1,
+  },
   hint: {
     backgroundColor: "#F3F4F6",
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
+    padding: 10,
+    marginBottom: 14,
   },
   hintText: {
     color: "#6B7280",
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
     textAlign: "center",
   },
   footerText: {
     color:     "#6B7280",
     fontSize:  14,
     lineHeight: 21,
-    marginTop: 22,
+    marginTop: 16,
     textAlign: "center",
   },
   linkStrong: { color: "#16A34A", fontWeight: "900" },
 });
-
-
-
-
-
-
-
-
-

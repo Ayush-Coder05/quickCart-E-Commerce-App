@@ -24,8 +24,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
-import { CommonActions } from "@react-navigation/native";
+
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -93,7 +92,6 @@ const LOCATION_CARD = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PermissionFlowScreen() {
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   const [step,      setStep]      = useState<Step>(0);
@@ -112,8 +110,9 @@ export default function PermissionFlowScreen() {
       }
       router.replace({ pathname: "/home", params: { state: stateName } });
     },
-    [navigation],
+    [],
   );
+
 
   // ── Navigate to State Picker (fallback) ────────────────────────────────────
   const goStatePicker = useCallback(

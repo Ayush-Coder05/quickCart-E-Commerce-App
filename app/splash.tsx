@@ -289,13 +289,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
+    paddingVertical: 20,
   },
 
   // ── Logo ────────────────────────────────────────────────────────────────────
   logoWrapper: {
-    width:         width * 0.78,
-    height:        width * 0.48,
-    marginBottom:  16,
+    width:         width * 0.68,
+    height:        width * 0.40,
+    marginBottom:  10,
     alignItems:    "center",
     justifyContent:"center",
   },
@@ -324,21 +325,21 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
-  // ── Tagline ─────────────────────────────────────────────────────────────────
+  // ── Tagline ─────────────────────────────────────────────────────────────
   tagline: {
-    fontSize:       15,
+    fontSize:       14,
     color:          "#4B5563",
     textAlign:      "center",
-    lineHeight:     23,
-    marginBottom:   32,
+    lineHeight:     21,
+    marginBottom:   20,
     fontWeight:     "500",
   },
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeRow: {
     flexDirection: "row",
-    gap:           10,
-    marginBottom:  44,
+    gap:           8,
+    marginBottom:  28,
   },
   badge: {
     alignItems:      "center",
@@ -365,10 +366,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
-  // ── CTA button ──────────────────────────────────────────────────────────────
+  // ── CTA button ──────────────────────────────────────────────────────────
   btnWrapper: {
     width:         "100%",
-    marginBottom:  18,
+    marginBottom:  14,
     shadowColor:   "#16A34A",
     shadowOffset:  { width: 0, height: 8 },
     shadowOpacity: 0.3,

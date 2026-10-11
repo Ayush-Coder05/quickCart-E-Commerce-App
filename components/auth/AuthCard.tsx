@@ -14,43 +14,57 @@ interface AuthCardProps {
   title: string;
   subtitle: string;
   children: ReactNode;
+  /** Allow internal scroll – use for forms with many fields (e.g. signup) */
+  scrollable?: boolean;
 }
 
-export function AuthCard({ title, subtitle, children }: AuthCardProps) {
+export function AuthCard({ title, subtitle, children, scrollable = false }: AuthCardProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 720;
+
+  const innerContent = (
+    <View style={[styles.inner, isWide && styles.innerWide]}>
+      {/* Brand panel */}
+      <View style={[styles.brandPanel, isWide && styles.brandPanelWide]}>
+        <Image
+          source={require("../../assets/images/quickcart-logo.png")}
+          style={[styles.logo, isWide && styles.logoWide]}
+          resizeMode="contain"
+        />
+        <Text style={styles.brandText}>Fresh finds, faster checkout.</Text>
+      </View>
+
+      {/* Form panel */}
+      <View style={[styles.panel, isWide && styles.panelWide]}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
+        {children}
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboard}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, isWide ? styles.wideContent : null]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets={true}
-        >
-          <View style={[styles.brandPanel, isWide ? styles.brandPanelWide : null]}>
-            <Image
-              source={require("../../assets/images/quickcart-logo.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={styles.brandText}>Fresh finds, faster checkout.</Text>
+        {scrollable ? (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets={true}
+          >
+            {innerContent}
+            <View style={styles.keyboardSpacer} />
+          </ScrollView>
+        ) : (
+          <View style={styles.staticContent}>
+            {innerContent}
           </View>
-
-          <View style={[styles.panel, isWide ? styles.panelWide : null]}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
-            {children}
-          </View>
-
-          {/* Extra space so content above keyboard is always reachable */}
-          <View style={styles.keyboardSpacer} />
-        </ScrollView>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -59,23 +73,31 @@ export function AuthCard({ title, subtitle, children }: AuthCardProps) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F3F4F6", // Light Gray background
+    backgroundColor: "#F3F4F6",
   },
   keyboard: {
     flex: 1,
+  },
+  staticContent: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 20,
-    paddingVertical: 36,
-    gap: 24,
+    paddingVertical: 16,
   },
-  wideContent: {
-    alignItems: "center",
+  inner: {
+    gap: 16,
+  },
+  innerWide: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 44,
-    paddingHorizontal: 48,
+    paddingHorizontal: 28,
   },
   brandPanel: {
     alignItems: "center",
@@ -87,15 +109,21 @@ const styles = StyleSheet.create({
   },
   logo: {
     width: "100%",
+    maxWidth: 220,
+    height: 90,
+    alignSelf: "center",
+  },
+  logoWide: {
     maxWidth: 300,
-    height: 150,
+    height: 130,
   },
   brandText: {
     color: "#6B7280",
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 13,
+    lineHeight: 20,
     textAlign: "center",
     fontWeight: "500",
+    marginTop: 2,
   },
   panel: {
     width: "100%",
@@ -105,7 +133,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
-    padding: 24,
+    padding: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -117,19 +145,18 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#1F2937",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "900",
-    marginBottom: 8,
+    marginBottom: 4,
     letterSpacing: -0.5,
   },
   subtitle: {
     color: "#6B7280",
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 24,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 18,
   },
   keyboardSpacer: {
-    height: 120,
+    height: 40,
   },
 });
-

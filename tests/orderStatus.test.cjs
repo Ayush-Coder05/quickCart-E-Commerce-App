@@ -7,30 +7,30 @@ const {
 
 test("exposes every customer-visible fulfillment state", () => {
   assert.deepEqual(ORDER_STATUS_FLOW, [
-    "pending",
     "confirmed",
+    "preparing",
     "packed",
-    "shipped",
+    "outForDelivery",
     "delivered",
     "cancelled",
   ]);
 });
 
 test("permits the next fulfillment step", () => {
-  assert.equal(canUpdateOrderStatus("pending", "confirmed"), true);
-  assert.equal(canUpdateOrderStatus("confirmed", "packed"), true);
-  assert.equal(canUpdateOrderStatus("packed", "shipped"), true);
-  assert.equal(canUpdateOrderStatus("shipped", "delivered"), true);
+  assert.equal(canUpdateOrderStatus("confirmed", "preparing"), true);
+  assert.equal(canUpdateOrderStatus("preparing", "packed"), true);
+  assert.equal(canUpdateOrderStatus("packed", "outForDelivery"), true);
+  assert.equal(canUpdateOrderStatus("outForDelivery", "delivered"), true);
 });
 
 test("allows cancellation only before delivery", () => {
-  assert.equal(canUpdateOrderStatus("pending", "cancelled"), true);
-  assert.equal(canUpdateOrderStatus("shipped", "cancelled"), true);
+  assert.equal(canUpdateOrderStatus("confirmed", "cancelled"), true);
+  assert.equal(canUpdateOrderStatus("outForDelivery", "cancelled"), true);
   assert.equal(canUpdateOrderStatus("delivered", "cancelled"), false);
 });
 
 test("rejects backwards, skipped, and terminal-state transitions", () => {
-  assert.equal(canUpdateOrderStatus("pending", "packed"), false);
-  assert.equal(canUpdateOrderStatus("delivered", "pending"), false);
+  assert.equal(canUpdateOrderStatus("confirmed", "packed"), false);
+  assert.equal(canUpdateOrderStatus("delivered", "confirmed"), false);
   assert.equal(canUpdateOrderStatus("cancelled", "confirmed"), false);
 });
