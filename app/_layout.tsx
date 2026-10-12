@@ -14,15 +14,30 @@
 //      role check; this layout just registers the group so Expo Router finds it.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { requireOptionalNativeModule } from "expo";
 import { Stack, router } from "expo-router";
 import { useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { auth } from "../utils/firebase";
 import { ROUTES } from "../utils/routes";
 
+const DevMenuPreferences = requireOptionalNativeModule("DevMenuPreferences");
+
 export default function RootLayout() {
   const authChecked       = useRef(false);
   const previousUserRef   = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (__DEV__) {
+      DevMenuPreferences?.setPreferencesAsync({
+        showFloatingActionButton: false,
+        motionGestureEnabled: true,
+        touchGestureEnabled: true,
+        keyCommandsEnabled: true,
+        showsAtLaunch: false,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -54,7 +69,6 @@ export default function RootLayout() {
     });
 
     return () => unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
