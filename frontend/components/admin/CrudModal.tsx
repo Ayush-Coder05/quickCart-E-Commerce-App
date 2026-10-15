@@ -5,13 +5,14 @@
 //  Renders a set of field configs passed via `fields` prop, handles state,
 //  validation, and calls onSave with the form data on submit.
 //
-//  When `imageSectionProps` is provided the modal renders a product-image
-//  picker section ABOVE the fields: preview + "Change Image" button.
+//  Supports text, number, multiline, boolean, select, and direct "image" edit!
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -25,11 +26,13 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { API_BASE_URL, uploadImage } from "../../utils/api";
 
 const PRIMARY   = "#16A34A";
 const ERROR_COL = "#DC2626";
 
-export type FieldType = "text" | "number" | "multiline" | "boolean" | "select";
+export type FieldType = "text" | "number" | "multiline" | "boolean" | "select" | "image";
 
 export interface FieldDef {
   key:          string;
@@ -41,19 +44,267 @@ export interface FieldDef {
   keyboardType?: "default" | "numeric" | "phone-pad" | "email-address";
 }
 
-
-
 interface Props {
-  visible:          boolean;
-  title:            string;
-  fields:           FieldDef[];
-  initial?:         Record<string, unknown>;
-  saving:           boolean;
-  onSave:           (data: Record<string, unknown>) => Promise<void>;
-  onCancel:         () => void;
-
+  visible:  boolean;
+  title:    string;
+  fields:   FieldDef[];
+  initial?: Record<string, unknown>;
+  saving:   boolean;
+  onSave:   (data: Record<string, unknown>) => Promise<void>;
+  onCancel: () => void;
 }
 
+// ── Direct Image Editor Component ──────────────────────────────────────────────
+function ImageFieldEditor({
+  value,
+  onChange,
+  label,
+  required,
+  error,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label: string;
+  required?: boolean;
+  error?: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
+  // Normalize display uri for Unsplash, uploads, and local/remote URLs
+  const displayUri = useMemo(() => {
+    if (!value) return "";
+    const trimmed = String(value).trim();
+    if (trimmed.startsWith("/photo-") || trimmed.startsWith("photo-")) {
+      return `https://images.unsplash.com/${trimmed.replace(/^\//, "")}`;
+    }
+    if (trimmed.startsWith("//")) {
+      return `https:${trimmed}`;
+    }
+    if (trimmed.startsWith("/uploads/")) {
+      return `${API_BASE_URL}${trimmed}`;
+    }
+    return trimmed;
+  }, [value]);
+
+  const handlePickFromGallery = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Required", "Media library permission is required to select photos.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        // Instantly display selected image in preview
+        onChange(asset.uri);
+        setUploading(true);
+        try {
+          const finalUrl = await uploadImage(asset.uri, asset.base64);
+          onChange(finalUrl);
+        } catch (uploadErr) {
+          console.warn("Upload failed, keeping base64/local URI:", uploadErr);
+          if (asset.base64) {
+            onChange(`data:image/jpeg;base64,${asset.base64}`);
+          }
+        } finally {
+          setUploading(false);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to pick image");
+      setUploading(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Required", "Camera permission is required to take photos.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        // Instantly display selected photo in preview
+        onChange(asset.uri);
+        setUploading(true);
+        try {
+          const finalUrl = await uploadImage(asset.uri, asset.base64);
+          onChange(finalUrl);
+        } catch (uploadErr) {
+          console.warn("Upload failed, keeping base64/local URI:", uploadErr);
+          if (asset.base64) {
+            onChange(`data:image/jpeg;base64,${asset.base64}`);
+          }
+        } finally {
+          setUploading(false);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to take photo");
+      setUploading(false);
+    }
+  };
+
+  const promptPickerOptions = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Cancel", "Take Photo", "Choose from Gallery", ...(value ? ["Remove Photo"] : [])],
+          destructiveButtonIndex: value ? 3 : undefined,
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) handleTakePhoto();
+          else if (buttonIndex === 2) handlePickFromGallery();
+          else if (buttonIndex === 3) onChange("");
+        }
+      );
+    } else {
+      Alert.alert(
+        "Edit Product Image",
+        "Choose an option to update the image",
+        [
+          { text: "Take Photo", onPress: handleTakePhoto },
+          { text: "Choose from Gallery", onPress: handlePickFromGallery },
+          ...(value ? [{ text: "Remove Photo", style: "destructive" as const, onPress: () => onChange("") }] : []),
+          { text: "Cancel", style: "cancel" as const },
+        ]
+      );
+    }
+  };
+
+  return (
+    <View style={styles.imageEditSection}>
+      <Text style={styles.fieldLabel}>
+        {label}{required ? " *" : ""}
+      </Text>
+
+      <Pressable
+        onPress={promptPickerOptions}
+        style={({ pressed }) => [
+          styles.imageCard,
+          error ? styles.inputError : null,
+          pressed && { opacity: 0.88 },
+        ]}
+      >
+        {displayUri ? (
+          <View style={styles.imagePreviewContainer}>
+            <Image
+              source={{ uri: displayUri }}
+              style={styles.imagePreview}
+              contentFit="cover"
+              cachePolicy="none"
+            />
+            {uploading && (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.uploadingText}>Saving photo...</Text>
+              </View>
+            )}
+            <View style={styles.editBadge}>
+              <Ionicons name="camera" size={15} color="#fff" />
+              <Text style={styles.editBadgeText}>Change Photo</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.placeholderContainer}>
+            <View style={styles.placeholderIconCircle}>
+              <Ionicons name="camera-outline" size={30} color={PRIMARY} />
+            </View>
+            <Text style={styles.placeholderTitle}>Upload Product Image</Text>
+            <Text style={styles.placeholderSub}>Tap to take a photo or select from library</Text>
+            {uploading && (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="small" color={PRIMARY} />
+                <Text style={styles.uploadingText}>Uploading...</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </Pressable>
+
+      {/* Action Buttons underneath preview */}
+      <View style={styles.imageActionRow}>
+        <Pressable
+          onPress={handleTakePhoto}
+          style={styles.actionBtn}
+          disabled={uploading}
+        >
+          <Ionicons name="camera" size={17} color={PRIMARY} />
+          <Text style={styles.actionBtnText}>Take Photo</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={handlePickFromGallery}
+          style={styles.actionBtn}
+          disabled={uploading}
+        >
+          <Ionicons name="images" size={17} color={PRIMARY} />
+          <Text style={styles.actionBtnText}>Gallery</Text>
+        </Pressable>
+
+        {value ? (
+          <Pressable
+            onPress={() => onChange("")}
+            style={[styles.actionBtn, styles.actionBtnDanger]}
+            disabled={uploading}
+          >
+            <Ionicons name="trash-outline" size={17} color={ERROR_COL} />
+            <Text style={[styles.actionBtnText, { color: ERROR_COL }]}>Remove</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* Optional fallback link to paste URL */}
+      <Pressable
+        onPress={() => setShowUrlInput(!showUrlInput)}
+        style={styles.urlToggleBtn}
+      >
+        <Ionicons name={showUrlInput ? "chevron-up" : "link-outline"} size={13} color="#6B7280" />
+        <Text style={styles.urlToggleText}>
+          {showUrlInput ? "Hide image link" : "Paste image link instead"}
+        </Text>
+      </Pressable>
+
+      {showUrlInput && (
+        <View style={styles.urlInputBox}>
+          <TextInput
+            style={styles.input}
+            value={value}
+            onChangeText={onChange}
+            placeholder="https://example.com/product.jpg"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      )}
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
+// ── CrudModal ──────────────────────────────────────────────────────────────────
 export function CrudModal({
   visible,
   title,
@@ -62,7 +313,6 @@ export function CrudModal({
   saving,
   onSave,
   onCancel,
-
 }: Props) {
   const [form,   setForm]   = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -72,7 +322,6 @@ export function CrudModal({
       const defaults: Record<string, unknown> = {};
       fields.forEach((f) => {
         if (f.type === "select" && f.options?.length) {
-          // For select fields, use the initial value if present, otherwise fall back to the first option
           defaults[f.key] = initial?.[f.key] ?? f.options[0].value;
         } else {
           defaults[f.key] = initial?.[f.key] ?? (f.type === "boolean" ? false : f.type === "number" ? "" : "");
@@ -126,42 +375,58 @@ export function CrudModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-
             {fields.map((f) => (
               <View key={f.key} style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>
-                  {f.label}{f.required ? " *" : ""}
-                </Text>
-
-                {f.type === "boolean" ? (
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>{form[f.key] ? "Yes" : "No"}</Text>
-                    <Switch
-                      value={Boolean(form[f.key])}
-                      onValueChange={(v) => set(f.key, v)}
-                      trackColor={{ false: "#D1D5DB", true: PRIMARY }}
-                      thumbColor="#fff"
-                    />
-                  </View>
+                {f.type === "image" ? (
+                  <ImageFieldEditor
+                    label={f.label}
+                    required={f.required}
+                    value={String(form[f.key] ?? "")}
+                    onChange={(newVal) => set(f.key, newVal)}
+                    error={errors[f.key]}
+                  />
+                ) : f.type === "boolean" ? (
+                  <>
+                    <Text style={styles.fieldLabel}>
+                      {f.label}{f.required ? " *" : ""}
+                    </Text>
+                    <View style={styles.switchRow}>
+                      <Text style={styles.switchLabel}>{form[f.key] ? "Yes" : "No"}</Text>
+                      <Switch
+                        value={Boolean(form[f.key])}
+                        onValueChange={(v) => set(f.key, v)}
+                        trackColor={{ false: "#D1D5DB", true: PRIMARY }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  </>
                 ) : f.type === "select" && f.options ? (
-                  <View style={styles.selectRow}>
-                    {f.options.map((opt) => (
-                      <Pressable
-                        key={opt.value}
-                        onPress={() => set(f.key, opt.value)}
-                        style={[
-                          styles.selectChip,
-                          form[f.key] === opt.value && styles.selectChipActive,
-                        ]}
-                      >
-                        <Text style={[styles.selectChipText, form[f.key] === opt.value && styles.selectChipTextActive]}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <>
+                    <Text style={styles.fieldLabel}>
+                      {f.label}{f.required ? " *" : ""}
+                    </Text>
+                    <View style={styles.selectRow}>
+                      {f.options.map((opt) => (
+                        <Pressable
+                          key={opt.value}
+                          onPress={() => set(f.key, opt.value)}
+                          style={[
+                            styles.selectChip,
+                            form[f.key] === opt.value && styles.selectChipActive,
+                          ]}
+                        >
+                          <Text style={[styles.selectChipText, form[f.key] === opt.value && styles.selectChipTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
                 ) : (
                   <>
+                    <Text style={styles.fieldLabel}>
+                      {f.label}{f.required ? " *" : ""}
+                    </Text>
                     <TextInput
                       style={[
                         styles.input,
@@ -177,23 +442,10 @@ export function CrudModal({
                       numberOfLines={f.type === "multiline" ? 4 : 1}
                       textAlignVertical={f.type === "multiline" ? "top" : "center"}
                     />
-                    {/* Live image preview for URL fields */}
-                    {f.key === "imageUrl" && String(form[f.key] ?? "").startsWith("http") && (
-                      <View style={styles.previewBox}>
-                        <Image
-                          key={String(form[f.key])}
-                          source={{ uri: String(form[f.key]) }}
-                          style={styles.previewImage}
-                          contentFit="cover"
-                          cachePolicy="none"
-                        />
-                        <Text style={styles.previewLabel}>Image Preview</Text>
-                      </View>
-                    )}
                   </>
                 )}
 
-                {errors[f.key] ? (
+                {f.type !== "image" && errors[f.key] ? (
                   <Text style={styles.errorText}>{errors[f.key]}</Text>
                 ) : null}
               </View>
@@ -219,7 +471,7 @@ export function CrudModal({
 
 const styles = StyleSheet.create({
   overlay:   { flex: 1, justifyContent: "flex-end" },
-  overlayBg: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
+  overlayBg: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: {
     backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20,
     maxHeight: "90%", shadowColor: "#000",
@@ -263,10 +515,124 @@ const styles = StyleSheet.create({
   saveBtn:    { flex: 2, paddingVertical: 14, borderRadius: 10, backgroundColor: PRIMARY, alignItems: "center" },
   saveText:   { fontSize: 15, fontWeight: "700", color: "#fff" },
 
-  previewBox:   { marginTop: 10, alignItems: "center", gap: 6 },
-  previewImage: { width: "100%", height: 160, borderRadius: 12, backgroundColor: "#F3F4F6" },
-  previewLabel: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
+  // Direct Image Editor Styles
+  imageEditSection: { marginBottom: 4 },
+  imageCard: {
+    width: "100%",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imagePreviewContainer: {
+    width: "100%",
+    height: 180,
+    position: "relative",
+  },
+  imagePreview: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
+  },
+  uploadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  uploadingText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  editBadge: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(17, 24, 39, 0.85)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  editBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  placeholderContainer: {
+    paddingVertical: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "100%",
+  },
+  placeholderIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  placeholderTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  placeholderSub: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  imageActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  actionBtnDanger: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#15803D",
+  },
+  urlToggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 10,
+    alignSelf: "flex-start",
+  },
+  urlToggleText: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  urlInputBox: {
+    marginTop: 8,
+  },
 });
-
-
-
