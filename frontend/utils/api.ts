@@ -143,3 +143,64 @@ export const api = {
     apiRequest<T>(url, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   delete: <T = any>(url: string) => apiRequest<T>(url, { method: "DELETE" }),
 };
+
+export async function uploadImage(uri: string, base64Data?: string | null): Promise<string> {
+  // If base64 data is supplied, upload via base64 endpoint
+  if (base64Data) {
+    try {
+      const res = await api.post<{ success: boolean; url: string }>("/api/upload/base64", {
+        image: base64Data,
+        filename: "product.jpg",
+      });
+      if (res?.url) {
+        return res.url;
+      }
+    } catch (e) {
+      console.warn("Base64 upload failed, trying multipart:", e);
+    }
+  }
+
+  // Fallback to multipart FormData upload
+  try {
+    const token = await getAuthToken();
+    const formData = new FormData();
+    const ext = uri.split(".").pop()?.toLowerCase() || "jpg";
+
+    if (Platform.OS === "web") {
+      const fetchRes = await fetch(uri);
+      const blob = await fetchRes.blob();
+      formData.append("file", blob, `photo.${ext}`);
+    } else {
+      formData.append("file", {
+        uri,
+        name: `photo.${ext}`,
+        type: `image/${ext === "jpg" ? "jpeg" : ext}`,
+      } as any);
+    }
+
+    const uploadUrl = `${API_BASE_URL}/api/upload`;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (response.ok && data?.url) {
+      return data.url;
+    }
+  } catch (err) {
+    console.warn("Multipart upload failed:", err);
+  }
+
+  // If backend upload is unavailable, return data URI if available or uri
+  if (base64Data) {
+    return `data:image/jpeg;base64,${base64Data}`;
+  }
+  return uri;
+}
